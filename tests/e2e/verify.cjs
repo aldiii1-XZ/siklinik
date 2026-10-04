@@ -76,6 +76,34 @@ async function daftar(page, { nama, nim, email, sandi }) {
   await page.click('button[type="submit"]')
 }
 
+/**
+ * Menunggu balasan asisten selesai.
+ *
+ * Dalam mode LLM, jawaban bisa butuh belasan detik, jadi kita menunggu sampai
+ * indikator "sedang menulis" hilang — bukan menebak lama waktunya.
+ */
+async function tungguBalasan(page, batasMs = 60000) {
+  await page.waitForFunction(
+    () => {
+      const balon = document.querySelectorAll('.rounded-bl-md')
+      const terakhir = balon[balon.length - 1]
+      if (!terakhir) return false
+      const teks = (terakhir.textContent || '').trim()
+      return teks.length > 0 && !/sedang menulis/i.test(teks)
+    },
+    { timeout: batasMs },
+  )
+}
+
+/** Mengambil teks balasan asisten yang terakhir. */
+function teksBalasanTerakhir(page) {
+  return page.evaluate(() => {
+    const balon = document.querySelectorAll('.rounded-bl-md')
+    const terakhir = balon[balon.length - 1]
+    return terakhir ? (terakhir.textContent || '').trim() : ''
+  })
+}
+
 ;(async () => {
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
@@ -222,19 +250,23 @@ async function daftar(page, { nama, nim, email, sandi }) {
     await page.waitForSelector('text=Tanya asisten', { timeout: 15000 })
     check('Tab Asisten kesehatan terbuka', true)
 
-    // Pertanyaan ringan -> dapat saran
+    // Pertanyaan ringan -> dapat saran.
+    // Catatan: dalam mode LLM, susunan kata balasan berubah-ubah, jadi yang
+    // diperiksa adalah ada/tidaknya balasan asisten yang cukup panjang —
+    // bukan kata tertentu.
     await page.fill('textarea', 'aku demam sejak kemarin')
     await page.click('button:has-text("Kirim")')
-    await page.waitForTimeout(3000)
-    const balasanDemam = await page.textContent('body')
-    check('Asisten menjawab keluhan ringan', /istirahat|minum air/i.test(balasanDemam))
-    check('Asisten mengingatkan bukan pengganti dokter', /bukan pengganti dokter/i.test(balasanDemam))
+    await tungguBalasan(page)
+    const balasanDemam = await teksBalasanTerakhir(page)
+    check('Asisten menjawab keluhan ringan', balasanDemam.length > 60, `${balasanDemam.length} karakter`)
+    const halamanDemam = await page.textContent('body')
+    check('Asisten mengingatkan bukan pengganti dokter', /bukan pengganti dokter/i.test(halamanDemam))
 
     // Pertanyaan darurat -> diarahkan ke 119, tanpa menunggu LLM
     await page.fill('textarea', 'dada saya nyeri dan sesak napas')
     await page.click('button:has-text("Kirim")')
-    await page.waitForTimeout(3000)
-    const balasanDarurat = await page.textContent('body')
+    await tungguBalasan(page)
+    const balasanDarurat = await teksBalasanTerakhir(page)
     check('Keluhan darurat diarahkan ke 119', /119/.test(balasanDarurat))
 
     // Riwayat obrolan bertahan setelah muat ulang

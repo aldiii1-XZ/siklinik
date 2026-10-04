@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: siklinik
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      # Kunci LLM diisi lewat dashboard Render (tidak disimpan di repositori).
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        value: https://router.bynara.id/v1
+      - key: AI_MODEL
+        value: glm-5.3-flash

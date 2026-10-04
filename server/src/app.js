@@ -11,6 +11,8 @@
  *  - Hanya petugas yang boleh memanggil nomor dan mengubah status.
  *  - Mahasiswa hanya melihat antreannya sendiri.
  */
+import fs from 'node:fs'
+import path from 'node:path'
 import express from 'express'
 import cors from 'cors'
 import { z } from 'zod'
@@ -528,6 +530,18 @@ export function createApp(db, opsi = {}) {
       res.json({ ok: true })
     }),
   )
+
+  // ── Frontend hasil build (untuk deploy satu layanan) ──────────────────────
+  // Bila folder `dist/` ada, server ini sekaligus menyajikan aplikasi frontend,
+  // sehingga satu alamat melayani halaman web sekaligus API-nya.
+  if (opsi.staticDir && fs.existsSync(opsi.staticDir)) {
+    app.use(express.static(opsi.staticDir))
+    // Rute non-API diarahkan ke index.html agar navigasi sisi klien tetap jalan.
+    app.use((req, res, next) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api')) return next()
+      res.sendFile(path.join(opsi.staticDir, 'index.html'))
+    })
+  }
 
   // ── Penanganan galat ──────────────────────────────────────────────────────
 

@@ -32,7 +32,11 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
 const db = openDatabase(DB_PATH)
 const seeded = seedDatabase(db, { hashPassword })
 
-const app = createApp(db, { assistant })
+// Folder hasil build frontend (dibuat oleh `npm run build` di akar proyek).
+// Bila ada, server ini sekaligus menyajikan frontend (deploy satu layanan).
+const DIST_DIR = path.join(__dirname, '..', '..', 'dist')
+
+const app = createApp(db, { assistant, staticDir: DIST_DIR })
 
 const server = app.listen(PORT, () => {
   console.log(`SIKLINIK API berjalan di http://localhost:${PORT}`)
