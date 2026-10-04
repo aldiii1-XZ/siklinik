@@ -13,13 +13,20 @@
     "test:server": "npm --prefix server test",
     "test:all": "npm test && npm run test:server",
     "test:e2e": "node tests/e2e/verify.cjs",
+    "test:vercel": "node tests/vercel-fn.test.mjs",
     "server": "npm --prefix server start",
     "install:all": "npm install && npm --prefix server install",
     "start": "npm --prefix server start"
   },
   "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^4.6.5"
+  },
+  "engines": {
+    "node": ">=22.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
