@@ -4,11 +4,14 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "functions": {
-    "api/*.js": {
+    "api/index.js": {
       "memory": 512,
       "maxDuration": 60
     }
   },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api" }
+  ],
   "env": {
     "AI_BASE_URL": "https://router.bynara.id/v1",
     "AI_MODEL": "glm-5.3-flash",

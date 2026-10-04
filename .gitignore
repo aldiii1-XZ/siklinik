@@ -19,3 +19,6 @@ server/data/
 # Berkas lokal editor
 .DS_Store
 Thumbs.db
+
+.vercel
+.env*

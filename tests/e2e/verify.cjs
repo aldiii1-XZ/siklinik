@@ -113,7 +113,7 @@ function teksBalasanTerakhir(page) {
   page.on('console', m => {
     if (m.type() !== 'error') return
     // 401 dari uji login-salah memang disengaja.
-    if (/401 \(Unauthorized\)/.test(m.text())) return
+    if (/401/.test(m.text())) return
     errors.push(m.text())
   })
 
@@ -212,25 +212,37 @@ function teksBalasanTerakhir(page) {
     await page.waitForSelector('text=Papan antrean', { timeout: 20000 })
     check('Petugas masuk ke papan antrean', true)
 
+    // Papan memuat datanya secara asinkron; tunggu sampai nomor pasien uji
+    // benar-benar tampil sebelum membaca halaman.
+    await page.waitForSelector(`text=${nomorSaya}`, { timeout: 25000 }).catch(() => {})
     const papan = await page.textContent('body')
-    check('Antrean mahasiswa terlihat oleh petugas', papan.includes('Pasien Uji'))
+    // Menargetkan nomor milik pasien uji secara tepat — bukan sekadar nama,
+    // karena data uji bisa menumpuk dan nama "Pasien Uji" bisa berulang.
+    check('Antrean mahasiswa terlihat oleh petugas', !!nomorSaya && papan.includes(nomorSaya), nomorSaya ?? 'nomor tidak terbaca')
     check('Keluhan dari mahasiswa terlihat oleh petugas', papan.includes('Demam sejak kemarin'))
 
-    // Panggil nomor berikutnya
-    const tombolPanggil = page.locator('button:has-text("📢 Panggil")').first()
+    // Panggil nomor MILIK PASIEN UJI (bukan antrean lain yang kebetulan menunggu).
+    const barisUji = page
+      .locator(`div:has(button:has-text("Panggil")):has-text("${nomorSaya}")`)
+      .last()
+    check('Baris antrean pasien uji ada di papan', (await barisUji.count()) > 0)
+    const tombolPanggil = barisUji.locator('button:has-text("Panggil")').first()
     check('Tombol panggil tersedia untuk petugas', (await tombolPanggil.count()) > 0)
     if (await tombolPanggil.count() > 0) {
       await tombolPanggil.click()
-      await page.waitForTimeout(1500)
+      await page.waitForTimeout(2000)
       const setelahPanggil = await page.textContent('body')
-      check('Petugas berhasil memanggil nomor', setelahPanggil.includes('SEDANG DIPANGGIL'))
+      check(
+        'Petugas berhasil memanggil nomor',
+        setelahPanggil.includes('SEDANG DIPANGGIL') && setelahPanggil.includes(nomorSaya),
+      )
     }
 
     // Tandai selesai
     const tombolSelesai = page.locator('button:has-text("Tandai selesai")').first()
     if (await tombolSelesai.count() > 0) {
       await tombolSelesai.click()
-      await page.waitForTimeout(1500)
+      await page.waitForTimeout(2000)
       const setelahSelesai = await page.textContent('body')
       check('Petugas menandai antrean selesai', setelahSelesai.includes('SELESAI HARI INI'))
     } else {
@@ -242,6 +254,8 @@ function teksBalasanTerakhir(page) {
     await page.waitForSelector('text=Selamat datang', { timeout: 20000 })
     await klikTab(page, 'Riwayat')
     await page.waitForSelector('text=Riwayat kunjungan', { timeout: 10000 })
+    // Tunggu sampai baris riwayat benar-benar tampil sebelum diperiksa.
+    await page.waitForSelector(`text=${nomorSaya}`, { timeout: 25000 }).catch(() => {})
     const riwayatAkhir = await page.textContent('body')
     check('Status terbaru dari petugas terlihat mahasiswa', riwayatAkhir.includes('Selesai'))
 

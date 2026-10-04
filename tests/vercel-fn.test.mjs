@@ -1,17 +1,14 @@
 /**
  * Menguji fungsi serverless Vercel secara lokal.
  *
- * Meniru cara Vercel memanggil handler: memberi req.query.path, lalu memeriksa
- * respons yang keluar. Tujuannya menangkap kesalahan sebelum deploy.
+ * Meniru cara Vercel memanggil handler lewat rewrite: fungsi menerima alamat
+ * apa adanya (mis. "/api/assistant/info"). Tujuannya menangkap kesalahan
+ * sebelum deploy.
  */
 import http from 'node:http'
-import handler from '../api/[...path].js'
+import handler from '../api/index.js'
 
 const server = http.createServer((req, res) => {
-  // Tiru cara Vercel mengisi query untuk rute [...path].
-  const url = new URL(req.url, 'http://localhost')
-  const sisa = url.pathname.replace(/^\/api\/?/, '')
-  req.query = { path: sisa ? sisa.split('/') : [] }
   handler(req, res)
 })
 
@@ -45,9 +42,9 @@ cek('GET /api/health -> ok', sehat.status === 200 && sehat.body?.ok === true, JS
 const layanan = await minta('/api/services')
 cek('GET /api/services -> 3 layanan', layanan.status === 200 && layanan.body?.services?.length === 3, `dapat ${layanan.body?.services?.length}`)
 
-// 3. Info asisten
+// 3. Info asisten (DUA segmen — inilah yang sempat gagal di Vercel)
 const info = await minta('/api/assistant/info')
-cek('GET /api/assistant/info', info.status === 200 && ['lokal', 'llm'].includes(info.body?.mode), JSON.stringify(info.body))
+cek('GET /api/assistant/info (2 segmen)', info.status === 200 && ['lokal', 'llm'].includes(info.body?.mode), JSON.stringify(info.body))
 
 // 4. Login akun demo (inti: pengunjung harus bisa masuk)
 const masuk = await minta('/api/auth/login', { method: 'POST', body: { email: 'mahasiswa@kampus.ac.id', password: '12345678' } })
@@ -94,7 +91,13 @@ if (tokenBaru) {
   cek('Keluhan darurat -> 119', darurat.status === 200 && darurat.body?.darurat === true && /119/.test(darurat.body?.reply || ''))
 }
 
-// 9. Alamat tak dikenal tetap JSON
+// 9. Papan petugas (2 segmen) bisa diakses petugas
+if (masukPetugas.body?.token) {
+  const papan = await minta('/api/queues/board', { token: masukPetugas.body.token })
+  cek('Papan petugas (2 segmen) bisa diakses', papan.status === 200 && Array.isArray(papan.body?.queues), JSON.stringify(papan.body).slice(0, 100))
+}
+
+// 10. Alamat tak dikenal tetap JSON
 const tidakAda = await minta('/api/tidak-ada')
 cek('Alamat tak dikenal -> JSON error', tidakAda.status === 404 && !!tidakAda.body?.error)
 

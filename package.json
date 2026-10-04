@@ -19,6 +19,7 @@
     "start": "npm --prefix server start"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "react": "^19.0.0",
