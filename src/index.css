@@ -1,0 +1,87 @@
+@import 'tailwindcss';
+
+/*
+ * Tema SIKLINIK — mengikuti desain Figma:
+ * teal sebagai warna utama (kesehatan), latar abu sangat muda,
+ * kartu putih membulat dengan bayangan halus.
+ */
+:root {
+  --background: #f8f9fa;
+  --foreground: #1f2937;
+  --card: #ffffff;
+  --card-foreground: #1f2937;
+  --primary: #00897b;
+  --primary-dark: #00796b;
+  --primary-foreground: #ffffff;
+  --primary-soft: #e0f2f1;
+  --muted: #f1f3f5;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --accent: #d45060;
+  --navy: #1e293b;
+  --success: #16a34a;
+  --warning: #f59e0b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-border: var(--border);
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Sembunyikan scrollbar pada baris tab yang bisa digeser */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fokus yang jelas untuk pengguna papan ketik */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@keyframes siklinik-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.animate-pulse-soft {
+  animation: siklinik-pulse 2s ease-in-out infinite;
+}
