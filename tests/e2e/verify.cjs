@@ -216,6 +216,44 @@ async function daftar(page, { nama, nim, email, sandi }) {
     await page.waitForSelector('text=Riwayat kunjungan', { timeout: 10000 })
     const riwayatAkhir = await page.textContent('body')
     check('Status terbaru dari petugas terlihat mahasiswa', riwayatAkhir.includes('Selesai'))
+
+    // ── Asisten kesehatan ───────────────────────────────────────────────────
+    await klikTab(page, 'Asisten')
+    await page.waitForSelector('text=Tanya asisten', { timeout: 15000 })
+    check('Tab Asisten kesehatan terbuka', true)
+
+    // Pertanyaan ringan -> dapat saran
+    await page.fill('textarea', 'aku demam sejak kemarin')
+    await page.click('button:has-text("Kirim")')
+    await page.waitForTimeout(3000)
+    const balasanDemam = await page.textContent('body')
+    check('Asisten menjawab keluhan ringan', /istirahat|minum air/i.test(balasanDemam))
+    check('Asisten mengingatkan bukan pengganti dokter', /bukan pengganti dokter/i.test(balasanDemam))
+
+    // Pertanyaan darurat -> diarahkan ke 119, tanpa menunggu LLM
+    await page.fill('textarea', 'dada saya nyeri dan sesak napas')
+    await page.click('button:has-text("Kirim")')
+    await page.waitForTimeout(3000)
+    const balasanDarurat = await page.textContent('body')
+    check('Keluhan darurat diarahkan ke 119', /119/.test(balasanDarurat))
+
+    // Riwayat obrolan bertahan setelah muat ulang
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.waitForSelector('text=Selamat datang', { timeout: 20000 })
+    await klikTab(page, 'Asisten')
+    await page.waitForTimeout(2500)
+    const obrolanTersimpan = await page.textContent('body')
+    check('Riwayat obrolan bertahan setelah muat ulang', obrolanTersimpan.includes('demam sejak kemarin'))
+
+    // Bersihkan agar tidak menumpuk saat tes dijalankan berulang
+    const tombolHapusChat = page.locator('button:has-text("Hapus riwayat")')
+    if (await tombolHapusChat.count()) {
+      await tombolHapusChat.first().click()
+      await page.waitForTimeout(1500)
+      check('Riwayat obrolan bisa dihapus', (await page.textContent('body')).includes('ada yang bisa dibantu'))
+    } else {
+      check('Riwayat obrolan bisa dihapus', false, 'tombol hapus tidak ditemukan')
+    }
   } catch (err) {
     check('Alur berjalan tanpa kesalahan tak terduga', false, String(err).split('\n')[0])
   }

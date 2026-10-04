@@ -23,6 +23,7 @@ import {
   requireStaff,
   verifyPassword,
 } from './auth.js'
+import { buatAsisten } from './assistant.js'
 
 /** Menjalankan sekumpulan perintah dalam satu transaksi. */
 function transaction(db, fn) {
@@ -68,16 +69,21 @@ const statusSchema = z.object({
 /**
  * Membuat aplikasi Express.
  * `db` disuntikkan supaya tes dapat memakai basis data di memori.
+ * `opsi.assistant` juga bisa disuntikkan untuk menguji tanpa memanggil LLM.
  */
-export function createApp(db) {
+export function createApp(db, opsi = {}) {
   const app = express()
+  const assistant = opsi.assistant ?? buatAsisten()
   app.use(cors())
   app.use(express.json({ limit: '100kb' }))
   app.use(authenticate(db))
 
   const wrap = fn => (req, res, next) => {
     try {
-      fn(req, res, next)
+      const hasil = fn(req, res, next)
+      // Rute async (mis. asisten yang memanggil LLM) bisa menolak promise;
+      // tangkap agar tidak menjadi "unhandled rejection".
+      if (hasil && typeof hasil.catch === 'function') hasil.catch(next)
     } catch (err) {
       next(err)
     }
@@ -418,6 +424,108 @@ export function createApp(db) {
 
       db.prepare("UPDATE queues SET status = 'dibatalkan', finished_at = datetime('now') WHERE id = ?").run(id)
       res.json({ queue: getQueueById(id) })
+    }),
+  )
+
+  // ── Asisten kesehatan ─────────────────────────────────────────────────────
+
+  /** Batas panjang pesan dan jumlah percakapan yang dikirim ke LLM. */
+  const chatSchema = z.object({
+    message: z.string().trim().min(1, 'Pesan tidak boleh kosong.').max(1000, 'Pesan terlalu panjang (maks 1000 karakter).'),
+  })
+
+  /** Riwayat yang dikirim sebagai konteks ke LLM (maks 8 pesan terakhir). */
+  function riwayatUntukLLM(userId) {
+    return db
+      .prepare('SELECT role, content FROM chat_messages WHERE user_id = ? ORDER BY id DESC LIMIT 8')
+      .all(userId)
+      .reverse()
+      .map(r => ({ role: r.role, content: r.content }))
+  }
+
+  /**
+   * Pembatasan laju sederhana: maksimum 20 pesan per menit per pengguna.
+   * Mencegah satu akun membanjiri server atau menghabiskan kuota LLM.
+   */
+  const jendelaLaju = new Map()
+  function batasiLaju(userId) {
+    const sekarang = Date.now()
+    const catatan = (jendelaLaju.get(userId) ?? []).filter(t => sekarang - t < 60_000)
+    if (catatan.length >= 20) return false
+    catatan.push(sekarang)
+    jendelaLaju.set(userId, catatan)
+    return true
+  }
+
+  /** Informasi mode asisten (lokal atau LLM) untuk ditampilkan di klien. */
+  app.get('/api/assistant/info', (req, res) => {
+    res.json({ mode: assistant.mode })
+  })
+
+  /** Mengambil riwayat percakapan pengguna. */
+  app.get(
+    '/api/assistant/messages',
+    requireAuth,
+    wrap((req, res) => {
+      const rows = db
+        .prepare('SELECT id, role, content, created_at FROM chat_messages WHERE user_id = ? ORDER BY id ASC')
+        .all(req.user.id)
+      res.json({
+        mode: assistant.mode,
+        messages: rows.map(r => ({
+          id: r.id,
+          role: r.role,
+          content: r.content,
+          time: r.created_at.slice(11, 16),
+        })),
+      })
+    }),
+  )
+
+  /** Mengirim pesan ke asisten dan menyimpan percakapannya. */
+  app.post(
+    '/api/assistant/chat',
+    requireAuth,
+    wrap(async (req, res) => {
+      const parsed = chatSchema.safeParse(req.body)
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
+
+      if (!batasiLaju(req.user.id)) {
+        return res.status(429).json({ error: 'Terlalu banyak pesan. Tunggu sebentar lalu coba lagi.' })
+      }
+
+      const pertanyaan = parsed.data.message
+      const riwayat = riwayatUntukLLM(req.user.id)
+
+      // Simpan pesan pengguna lebih dulu agar tidak hilang bila LLM gagal.
+      db.prepare("INSERT INTO chat_messages (user_id, role, content) VALUES (?, 'user', ?)").run(
+        req.user.id,
+        pertanyaan,
+      )
+
+      const hasil = await assistant.tanya(pertanyaan, { nama: req.user.name, riwayat })
+
+      const info = db
+        .prepare("INSERT INTO chat_messages (user_id, role, content) VALUES (?, 'assistant', ?)")
+        .run(req.user.id, hasil.reply)
+
+      res.json({
+        reply: hasil.reply,
+        topik: hasil.topik,
+        darurat: hasil.darurat,
+        mode: hasil.mode,
+        id: Number(info.lastInsertRowid),
+      })
+    }),
+  )
+
+  /** Menghapus seluruh riwayat percakapan pengguna. */
+  app.delete(
+    '/api/assistant/messages',
+    requireAuth,
+    wrap((req, res) => {
+      db.prepare('DELETE FROM chat_messages WHERE user_id = ?').run(req.user.id)
+      res.json({ ok: true })
     }),
   )
 

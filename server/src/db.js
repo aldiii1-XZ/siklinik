@@ -56,9 +56,20 @@ export function openDatabase(path = ':memory:') {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Percakapan dengan asisten kesehatan. Disimpan agar riwayat obrolan
+    -- tidak hilang saat halaman dimuat ulang.
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role       TEXT    NOT NULL CHECK (role IN ('user', 'assistant')),
+      content    TEXT    NOT NULL,
+      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_queues_date ON queues(queue_date);
     CREATE INDEX IF NOT EXISTS idx_queues_user ON queues(user_id);
     CREATE INDEX IF NOT EXISTS idx_queues_service ON queues(service_id, queue_date);
+    CREATE INDEX IF NOT EXISTS idx_chat_user ON chat_messages(user_id, id);
   `)
 
   return db

@@ -22,11 +22,14 @@ import {
   type ApiQueue,
   type ApiService,
   type ApiUser,
+  type ChatMessage,
   type QueueStatus,
 } from './api'
 
-export type { ApiQueue as Queue, ApiService as Service, ApiUser as User, QueueStatus } from './api'
+export type { ApiQueue as Queue, ApiService as Service, ApiUser as User, QueueStatus, ChatMessage } from './api'
 export * from './display'
+export * from './chat'
+import { jamSekarang } from './chat'
 
 export interface ActionResult {
   ok: boolean
@@ -42,6 +45,10 @@ interface StoreValue {
   // Papan petugas
   boardServices: ApiService[]
   boardQueues: ApiQueue[]
+  // Asisten kesehatan
+  chatMessages: ChatMessage[]
+  chatMode: 'lokal' | 'llm'
+  chatBusy: boolean
   loading: boolean
   error: string | null
   // Aksi
@@ -59,6 +66,9 @@ interface StoreValue {
   takeQueue: (serviceId: number, complaint?: string) => Promise<ActionResult>
   cancelQueue: (id: number) => Promise<ActionResult>
   setStatus: (id: number, status: QueueStatus) => Promise<ActionResult>
+  loadChat: () => Promise<void>
+  sendChat: (pesan: string) => Promise<ActionResult>
+  clearChat: () => Promise<ActionResult>
   refresh: () => Promise<void>
   refreshBoard: () => Promise<void>
 }
@@ -74,6 +84,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<ActiveQueueInfo>(EMPTY_ACTIVE)
   const [boardServices, setBoardServices] = useState<ApiService[]>([])
   const [boardQueues, setBoardQueues] = useState<ApiQueue[]>([])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatMode, setChatMode] = useState<'lokal' | 'llm'>('lokal')
+  const [chatBusy, setChatBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -101,6 +114,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const { services: s, queues } = await api.board()
     setBoardServices(s)
     setBoardQueues(queues)
+  }, [])
+
+  /** Mengambil riwayat percakapan dengan asisten kesehatan. */
+  const loadChat = useCallback(async () => {
+    if (!getToken()) return
+    try {
+      const { messages, mode } = await api.assistantMessages()
+      setChatMessages(messages)
+      setChatMode(mode)
+    } catch {
+      // Riwayat gagal dimuat bukan hal fatal; obrolan tetap bisa dimulai.
+    }
   }, [])
 
   // Muat data saat aplikasi dibuka; pulihkan sesi bila token masih ada.
@@ -185,6 +210,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setActive(EMPTY_ACTIVE)
     setBoardQueues([])
     setBoardServices([])
+    setChatMessages([])
   }, [])
 
   const updateProfile = useCallback(
@@ -239,21 +265,70 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refreshBoard],
   )
 
+  /**
+   * Mengirim pesan ke asisten.
+   *
+   * Pesan pengguna langsung ditampilkan supaya terasa responsif, lalu balasan
+   * server menggantikan daftar pesan dengan versi yang tersimpan.
+   */
+  const sendChat = useCallback(async (pesan: string): Promise<ActionResult> => {
+    const teks = pesan.trim()
+    if (!teks) return { ok: false, error: 'Pesan tidak boleh kosong.' }
+
+    // Tampilkan pesan pengguna lebih dulu (optimistis).
+    const sementara: ChatMessage = {
+      id: -Date.now(),
+      role: 'user',
+      content: teks,
+      time: jamSekarang(),
+    }
+    setChatMessages(prev => [...prev, sementara])
+    setChatBusy(true)
+
+    try {
+      await api.sendChat(teks)
+      const { messages, mode } = await api.assistantMessages()
+      setChatMessages(messages)
+      setChatMode(mode)
+      return { ok: true }
+    } catch (err) {
+      // Gagal: buang pesan sementara agar tidak tampak terkirim.
+      setChatMessages(prev => prev.filter(m => m.id !== sementara.id))
+      return { ok: false, error: toMessage(err) }
+    } finally {
+      setChatBusy(false)
+    }
+  }, [])
+
+  const clearChat = useCallback(async (): Promise<ActionResult> => {
+    try {
+      await api.clearChat()
+      setChatMessages([])
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: toMessage(err) }
+    }
+  }, [])
+
   const value = useMemo<StoreValue>(
     () => ({
       user, services, myQueues, active,
       boardServices, boardQueues,
+      chatMessages, chatMode, chatBusy,
       loading, error,
       login, register, logout, updateProfile,
       takeQueue, cancelQueue, setStatus,
+      loadChat, sendChat, clearChat,
       refresh, refreshBoard,
     }),
     [
       user, services, myQueues, active,
       boardServices, boardQueues,
+      chatMessages, chatMode, chatBusy,
       loading, error,
       login, register, logout, updateProfile,
       takeQueue, cancelQueue, setStatus,
+      loadChat, sendChat, clearChat,
       refresh, refreshBoard,
     ],
   )

@@ -111,6 +111,13 @@ export interface ActiveQueueInfo {
   estimate: string | null
 }
 
+export interface ChatMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  time: string
+}
+
 // ── Endpoint ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -149,4 +156,19 @@ export const api = {
 
   cancelQueue: (id: number) =>
     request<{ queue: ApiQueue }>('POST', `/queues/${id}/cancel`),
+
+  // Asisten kesehatan
+  assistantInfo: () => request<{ mode: 'lokal' | 'llm' }>('GET', '/assistant/info'),
+
+  assistantMessages: () =>
+    request<{ mode: 'lokal' | 'llm'; messages: ChatMessage[] }>('GET', '/assistant/messages'),
+
+  sendChat: (message: string) =>
+    request<{ reply: string; topik: string | null; darurat: boolean; mode: 'lokal' | 'llm'; id: number }>(
+      'POST',
+      '/assistant/chat',
+      { message },
+    ),
+
+  clearChat: () => request<{ ok: boolean }>('DELETE', '/assistant/messages'),
 }

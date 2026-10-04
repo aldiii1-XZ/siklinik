@@ -6,14 +6,16 @@
 import { useEffect, useState } from 'react'
 import { Avatar, Card, EmptyState, Notice, StatusBadge } from '../components/ui'
 import { Logo } from '../components/ui'
+import AssistantChat from '../components/AssistantChat'
 import { useStore, formatDate, formatDateFull, greeting, sortByNewest } from '../store/store'
 import type { Service } from '../store/store'
 
-type Tab = 'beranda' | 'layanan' | 'riwayat' | 'profil'
+type Tab = 'beranda' | 'layanan' | 'asisten' | 'riwayat' | 'profil'
 
 const MENU: { id: Tab; label: string; icon: string }[] = [
   { id: 'beranda', label: 'Beranda', icon: '🏠' },
   { id: 'layanan', label: 'Layanan', icon: '🩺' },
+  { id: 'asisten', label: 'Asisten', icon: '💬' },
   { id: 'riwayat', label: 'Riwayat', icon: '📋' },
   { id: 'profil', label: 'Profil', icon: '👤' },
 ]
@@ -263,6 +265,28 @@ export default function StudentApp() {
                   Cukupi kebutuhan air minum dan istirahat di sela aktivitas kuliahmu.
                 </p>
               </div>
+
+              {/* Ajakan mencoba asisten kesehatan */}
+              <button
+                onClick={() => setTab('asisten')}
+                className="w-full rounded-2xl p-5 text-left transition-all hover:shadow-md flex items-center gap-4"
+                style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+              >
+                <div
+                  className="shrink-0 w-12 h-12 rounded-2xl grid place-items-center text-2xl"
+                  style={{ background: 'var(--primary-soft)', color: 'var(--primary-dark)' }}
+                  aria-hidden="true"
+                >
+                  💬
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display font-bold mb-0.5">Ada keluhan? Tanya asisten kesehatan</h3>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    Ceritakan gejalamu dan dapatkan saran awal sebelum ke klinik.
+                  </p>
+                </div>
+                <span className="shrink-0 text-lg" style={{ color: 'var(--primary)' }} aria-hidden="true">→</span>
+              </button>
             </div>
           )}
 
@@ -313,6 +337,9 @@ export default function StudentApp() {
               </div>
             </div>
           )}
+
+          {/* ── Asisten ─────────────────────────────────────────────────── */}
+          {tab === 'asisten' && <AssistantChat />}
 
           {/* ── Riwayat ─────────────────────────────────────────────────── */}
           {tab === 'riwayat' && (
