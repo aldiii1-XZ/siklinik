@@ -394,6 +394,23 @@ export const CATATAN_PENUTUP =
   '\n\n_Aku asisten digital, bukan pengganti dokter. Kalau keluhanmu berlanjut atau memberat, ambil nomor antrean di menu Layanan ya._'
 
 /**
+ * Membuang catatan penutup dari sebuah teks.
+ *
+ * Dipakai saat mengirim riwayat ke LLM: bila catatan ini ikut terkirim, model
+ * akan menirunya dan catatan jadi muncul dua kali di balasan akhir.
+ */
+export function tanpaCatatan(teks) {
+  return String(teks ?? '')
+    .replace(/\n*_?Aku asisten digital, bukan pengganti dokter\.[^_]*_?/gi, '')
+    .trim()
+}
+
+/** Apakah teks sudah memuat peringatan "bukan pengganti dokter". */
+function sudahAdaCatatan(teks) {
+  return /bukan pengganti dokter/i.test(teks)
+}
+
+/**
  * System prompt untuk mode LLM.
  *
  * Ditulis eksplisit supaya model tidak "ngasal" dalam konteks kesehatan.
@@ -473,9 +490,15 @@ export function buatAsisten({ apiKey, baseUrl, model, timeoutMs = 30000 } = {}) 
 
       // ── Mode LLM ──────────────────────────────────────────────────────────
       try {
+        // Riwayat dibersihkan dari catatan penutup supaya model tidak
+        // menirunya (bila ikut terkirim, catatan muncul dua kali).
+        const riwayatBersih = (Array.isArray(konteks.riwayat) ? konteks.riwayat : [])
+          .slice(-8)
+          .map(m => ({ role: m.role, content: tanpaCatatan(m.content) }))
+
         const pesan = [
           { role: 'system', content: SYSTEM_PROMPT },
-          ...(Array.isArray(konteks.riwayat) ? konteks.riwayat.slice(-8) : []),
+          ...riwayatBersih,
           { role: 'user', content: pertanyaan },
         ]
 
@@ -499,10 +522,14 @@ export function buatAsisten({ apiKey, baseUrl, model, timeoutMs = 30000 } = {}) 
         if (!res.ok) throw new Error(`LLM membalas ${res.status}`)
 
         const data = await res.json()
+        // Ambil `content` saja — bukan `reasoning_content` — supaya proses
+        // berpikir model tidak ikut tampil ke pengguna.
         const isi = data?.choices?.[0]?.message?.content?.trim()
         if (!isi) throw new Error('LLM tidak mengembalikan jawaban.')
 
-        return { reply: isi + CATATAN_PENUTUP, topik: null, darurat: false, mode: 'llm' }
+        // Tambahkan catatan hanya bila model belum menuliskannya sendiri.
+        const akhir = sudahAdaCatatan(isi) ? isi : isi + CATATAN_PENUTUP
+        return { reply: akhir, topik: null, darurat: false, mode: 'llm' }
       } catch (err) {
         // LLM gagal (kunci salah, jaringan putus, kuota habis) -> jangan
         // biarkan pengguna tanpa jawaban. Turun ke mode lokal.

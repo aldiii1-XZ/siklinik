@@ -13,7 +13,7 @@ import assert from 'node:assert/strict'
 import { createApp } from '../src/app.js'
 import { openDatabase, seedDatabase } from '../src/db.js'
 import { hashPassword } from '../src/auth.js'
-import { buatAsisten, deteksiDarurat, jawabLokal, rangkaiJawaban } from '../src/assistant.js'
+import { buatAsisten, deteksiDarurat, jawabLokal, rangkaiJawaban, tanpaCatatan, CATATAN_PENUTUP } from '../src/assistant.js'
 
 // ── Bagian 1: modul asisten ─────────────────────────────────────────────────
 
@@ -194,6 +194,81 @@ describe('mode LLM', () => {
     assert.equal(buatAsisten({}).mode, 'lokal')
     assert.equal(buatAsisten({ apiKey: 'k' }).mode, 'lokal') // baseUrl & model kosong
     assert.equal(buatAsisten({ apiKey: 'k', baseUrl: 'https://x.test/v1' }).mode, 'lokal') // model kosong
+  })
+
+  test('catatan penutup tidak muncul dua kali bila model sudah menuliskannya', async () => {
+    // Model meniru catatan penutup dari riwayat -> kode tidak boleh menambah lagi.
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'Istirahat ya.' + CATATAN_PENUTUP } }],
+      }),
+    })
+    const r = await buatAsisten({ apiKey: 'k', baseUrl: 'https://c.test/v1', model: 'm' }).tanya('aku demam')
+    const jumlah = (r.reply.match(/bukan pengganti dokter/gi) || []).length
+    assert.equal(jumlah, 1, `catatan muncul ${jumlah} kali, seharusnya sekali`)
+  })
+
+  test('catatan penutup tetap ditambahkan bila model tidak menuliskannya', async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: 'Istirahat yang cukup.' } }] }),
+    })
+    const r = await buatAsisten({ apiKey: 'k', baseUrl: 'https://c.test/v1', model: 'm' }).tanya('aku demam')
+    assert.match(r.reply, /bukan pengganti dokter/i)
+  })
+
+  test('catatan penutup dibuang dari riwayat yang dikirim ke LLM', async () => {
+    // Bila catatan ikut terkirim, model akan menirunya dan catatan jadi ganda.
+    globalThis.fetch = async (url, opsi) => {
+      dipanggil = { opsi }
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) }
+    }
+    await buatAsisten({ apiKey: 'k', baseUrl: 'https://c.test/v1', model: 'm' }).tanya('lanjut', {
+      riwayat: [
+        { role: 'user', content: 'aku demam' },
+        { role: 'assistant', content: 'Istirahat ya.' + CATATAN_PENUTUP },
+      ],
+    })
+    const body = JSON.parse(dipanggil.opsi.body)
+    const dariAsisten = body.messages.find(m => m.role === 'assistant')
+    assert.ok(!/bukan pengganti dokter/i.test(dariAsisten.content), 'catatan harus dibuang dari riwayat')
+  })
+
+  test('reasoning_content model tidak bocor ke jawaban', async () => {
+    // NaraRouter/GLM mengembalikan proses berpikir di reasoning_content.
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'Minum air cukup ya.',
+              reasoning_content: 'RAHASIA-PROSES-BERPIKIR yang tidak boleh tampil',
+            },
+          },
+        ],
+      }),
+    })
+    const r = await buatAsisten({ apiKey: 'k', baseUrl: 'https://c.test/v1', model: 'm' }).tanya('aku haus')
+    assert.ok(!r.reply.includes('RAHASIA-PROSES-BERPIKIR'), 'reasoning_content bocor ke pengguna')
+    assert.match(r.reply, /Minum air/)
+  })
+})
+
+describe('tanpaCatatan', () => {
+  test('membuang catatan penutup', () => {
+    const teks = 'Istirahat ya.' + CATATAN_PENUTUP
+    assert.equal(tanpaCatatan(teks), 'Istirahat ya.')
+  })
+
+  test('teks tanpa catatan dibiarkan utuh', () => {
+    assert.equal(tanpaCatatan('Halo, ada yang bisa dibantu?'), 'Halo, ada yang bisa dibantu?')
+  })
+
+  test('teks kosong aman', () => {
+    assert.equal(tanpaCatatan(''), '')
+    assert.equal(tanpaCatatan(null), '')
   })
 })
 
