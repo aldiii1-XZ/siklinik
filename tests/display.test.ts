@@ -194,13 +194,13 @@ describe('format tanggal', () => {
 
 describe('teks untuk pengguna', () => {
   test('greeting mengambil nama depan saja', () => {
-    assert.equal(greeting('Aldi Ramadhan'), 'Aldi')
+    assert.equal(greeting('Aldi Yonatan'), 'Aldi')
     assert.equal(greeting('Siti'), 'Siti')
     assert.equal(greeting('  Budi   Santoso  '), 'Budi')
   })
 
   test('initials mengambil huruf depan dan belakang', () => {
-    assert.equal(initials('Aldi Ramadhan'), 'AR')
+    assert.equal(initials('Aldi Yonatan'), 'AY')
     assert.equal(initials('Siti Rahayu Putri'), 'SP')
     assert.equal(initials('Budi'), 'BU')
     assert.equal(initials(''), '?')

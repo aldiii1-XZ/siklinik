@@ -94,7 +94,7 @@ describe('mode lokal', () => {
   })
 
   test('sapaan menyebut nama depan pengguna', async () => {
-    const r = await buatAsisten().tanya('', { nama: 'Aldi Ramadhan' })
+    const r = await buatAsisten().tanya('', { nama: 'Aldi Yonatan' })
     assert.match(r.reply, /Halo Aldi/)
   })
 

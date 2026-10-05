@@ -84,8 +84,8 @@ export function seedDatabase(db, { hashPassword }) {
     'INSERT INTO users (name, identity, email, role, phone, password_hash, password_salt) VALUES (?, ?, ?, ?, ?, ?, ?)',
   )
   for (const u of [
-    { name: 'Aldi Ramadhan', identity: '231040012', email: 'mahasiswa@kampus.ac.id', role: 'mahasiswa', phone: '0812 3456 7890', password: '12345678' },
-    { name: 'Rina Kartika', identity: '198701012010', email: 'petugas@klinik.ac.id', role: 'petugas', phone: '0813 2222 3333', password: 'petugas123' },
+    { name: 'Aldi Yonatan', identity: '231040012', email: 'mahasiswa@kampus.ac.id', role: 'mahasiswa', phone: '0812 3456 7890', password: '12345678' },
+    { name: 'Irene Kartika', identity: '198701012010', email: 'petugas@klinik.ac.id', role: 'petugas', phone: '0813 2222 3333', password: 'petugas123' },
   ]) {
     const { hash, salt } = hashPassword(u.password)
     insertUser.run(u.name, u.identity, u.email, u.role, u.phone, hash, salt)

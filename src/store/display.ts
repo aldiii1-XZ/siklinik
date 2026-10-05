@@ -99,7 +99,7 @@ export function greeting(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name
 }
 
-/** Inisial untuk avatar: "Aldi Ramadhan" -> "AR". */
+/** Inisial untuk avatar: "Aldi Yonatan" -> "AY". */
 export function initials(name: string): string {
   const bagian = name.trim().split(/\s+/).filter(Boolean)
   if (bagian.length === 0) return '?'
